@@ -150,6 +150,29 @@ The table can be sorted by different metrics:
 - Shows the assigned role with both text and role icon
 - Updates dynamically when role changes
 
+# Champ Select
+
+## Setup
+
+1. Clone the repository
+2. Create and activate virtual environment
+3. Install requirements:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Run migrations:
+   ```bash
+   python manage.py migrate
+   ```
+5. Import data:
+   ```bash
+   python import_json.py
+   ```
+
+## Development
+
+...
+
 
 
 

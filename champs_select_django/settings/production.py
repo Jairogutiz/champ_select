@@ -13,7 +13,8 @@ ALLOWED_HOSTS = [
     'ec2-3-139-234-166.us-east-2.compute.amazonaws.com',
     '3.139.234.166',
     'localhost',
-    '127.0.0.1'
+    '127.0.0.1',
+    '*'  # Temporarily add this for testing
 ]
 
 # Important: Add this line
