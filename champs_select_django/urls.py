@@ -19,5 +19,7 @@ from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('recomm.urls')),  # Remove the recomm/ prefix
+    path('recommendations/', include('recomm.urls')),
+    # Optionally, redirect root to recommendations
+    path('', include('recomm.urls')),  # Add this if you want root to show recommendations
 ]
