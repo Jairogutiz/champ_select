@@ -10,13 +10,13 @@ SECRET_KEY = '!*+rv65elu#i&y$!8y)t)4(mc@*3=!pv_)xsy81kfp+6(oc5!u'
 DEBUG = False
 
 ALLOWED_HOSTS = [
-    'ec2-3-139-234-166.us-east-2.compute.amazonaws.com',
-    '3.139.234.166',
+    'ec2-3-129-217-58.us-east-2.compute.amazonaws.com',
+    '3.129.217.58',
     'localhost',
     '127.0.0.1'
 ]
 
-# Start with SQLite (easier to set up)
+# Database
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -24,12 +24,15 @@ DATABASES = {
     }
 }
 
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = '/static/'
+STATIC_ROOT = str(BASE_DIR / 'staticfiles')
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
+
 # API endpoints
 API_BASE_URL = 'http://ec2-3-129-217-58.us-east-2.compute.amazonaws.com'
-
-# Static files
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATIC_URL = 'static/'
 
 # Additional production settings
 CSRF_COOKIE_SECURE = True
