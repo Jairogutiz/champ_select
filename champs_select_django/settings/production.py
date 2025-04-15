@@ -7,7 +7,7 @@ import os
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = '!*+rv65elu#i&y$!8y)t)4(mc@*3=!pv_)xsy81kfp+6(oc5!u'
 
-DEBUG = False
+DEBUG = True  # Temporarily set to True for testing
 
 ALLOWED_HOSTS = [
     'ec2-3-139-234-166.us-east-2.compute.amazonaws.com',
@@ -36,6 +36,13 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATIC_URL = 'static/'
 
 # Additional production settings
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SECURE = True
-SECURE_SSL_REDIRECT = False  # Set to True if you set up HTTPS
+# Temporarily disable strict security for testing
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
+SECURE_SSL_REDIRECT = False
+
+# Add CSRF trusted origins
+CSRF_TRUSTED_ORIGINS = [
+    'http://3.139.234.166:8000',
+    'http://ec2-3-139-234-166.us-east-2.compute.amazonaws.com:8000',
+]
