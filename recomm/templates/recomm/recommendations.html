@@ -1,0 +1,1045 @@
+{% extends 'recomm/base.html' %}
+{% load recomm_extras %}
+
+{% block extra_styles %}
+<style>
+    .recommendations-container {
+        padding: 20px;
+    }
+
+    #recommendations-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    #recommendations-table th, #recommendations-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+        height: 80px; /* Ensure consistent cell height */
+    }
+
+    .champion-header {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .champion-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 5px;
+        flex-shrink: 0;
+    }
+
+    .role-icon {
+        width: 24px;
+        height: 24px;
+        margin-top: 4px;
+    }
+
+    .column-header {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .button-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .sort-button {
+        padding: 4px 8px;
+        cursor: pointer;
+        border: none;
+        background: #444;
+        color: #fff;
+        border-radius: 4px;
+    }
+
+    .sort-button:hover {
+        background: #555;
+    }
+
+    .sort-button.active {
+        background: #666;
+    }
+
+    .stat-value {
+        font-size: 24px; /* Increased from default */
+        font-weight: 500; /* Slightly bolder */
+        line-height: 1.2; /* Better vertical spacing */
+    }
+
+    .delta-positive {
+        color: #4CAF50;
+        font-size: 20px;
+        margin-top: 2px;
+    }
+
+    .delta-negative {
+        color: #f44336;
+        font-size: 20px;
+        margin-top: 2px;
+    }
+
+    .sample-size {
+        font-size: 12px;
+        color: #888;
+        margin-top: 2px;
+    }
+
+    .sample-size.low {
+        color: #ff9800;
+    }
+
+    .champion-cell {
+        display: flex;
+        flex-direction: row; /* Change to row instead of column */
+        align-items: center; /* Center items vertically */
+        justify-content: center; /* Center the entire content horizontally */
+        gap: 8px; /* Space between image and stats */
+    }
+
+    .champion-stats {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .low-samples {
+        font-size: 14px;
+        color: #ff9900;
+        margin-top: 2px;
+    }
+
+    .page-title {
+        text-align: center;
+        padding: 20px 0;
+        margin-bottom: 20px;
+        font-size: 2em;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+    }
+
+    .page-title .role-icon {
+        width: 32px;
+        height: 32px;
+        filter: brightness(1.2);
+    }
+
+    /* Only add border to champion icons in the champion column */
+    .champion-cell .champion-icon {
+        border: 2px solid;
+    }
+
+    /* Remove border from header images */
+    .champion-header .champion-icon {
+        border: none;
+    }
+
+    .color-legend-container {
+        display: flex;
+        gap: 40px;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+
+    .color-legend {
+        text-align: center;
+    }
+
+    .gradient-bar {
+        width: 300px;
+        height: 20px;
+        border-radius: 4px;
+        margin: 5px 0;
+    }
+
+    .wr-gradient {
+        background: linear-gradient(
+            to right,
+            #FF4444 0%,    /* -3% */
+            #FFD700 33%,   /* 0% */
+            #4CAF50 66%,   /* +3% */
+            #00BFFF 100%
+        );
+    }
+
+    .border-gradient {
+        background: linear-gradient(
+            to right,
+            #00ff00 0%,
+            #ffff00 50%,
+            #ff0000 100%
+        );
+    }
+
+    .legend-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #888;
+        width: 300px;
+    }
+
+    .legend-caption {
+        font-size: 14px;
+        color: #fff;
+        margin-top: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-title">
+    Recommendations for 
+    {% if assigned_role %}
+        <img src="{{ assigned_role|role_icon_url }}" alt="{{ assigned_role }}" class="role-icon">
+        {{ assigned_role|title }}
+    {% else %}
+        Unknown Role
+    {% endif %}
+</div>
+
+{# Add color legend bars #}
+<div class="color-legend-container">
+    <div class="color-legend">
+        <div class="gradient-bar wr-gradient"></div>
+        <div class="legend-labels">
+            <span>-3%</span>
+            <span>0%</span>
+            <span>+3%</span>
+            <span>+6%</span>
+        </div>
+        <div class="legend-caption">Winrate & Delta Values</div>
+    </div>
+    
+    <div class="color-legend">
+        <div class="gradient-bar border-gradient"></div>
+        <div class="legend-labels">
+            <span>30%</span>
+            <span>40%</span>
+            <span>50%</span>
+        </div>
+        <div class="legend-caption">Low Sample Icon Border</div>
+    </div>
+</div>
+
+<div class="recommendations-container">
+    <table id="recommendations-table">
+        <thead>
+            <tr>
+                {% for enemy in enemy_team %}
+                <th>
+                    <div class="champion-header">
+                        {% if enemy.0|champion_icon_url %}
+                            <img src="{{ enemy.0|champion_icon_url }}" alt="{{ enemy.0 }}" class="champion-icon">
+                        {% endif %}
+                        <img src="{{ enemy.1|role_icon_url }}" alt="{{ enemy.1 }}" class="role-icon">
+                    </div>
+                </th>
+                {% endfor %}
+                
+                <th>
+                    <div class="column-header">
+                        <div class="button-group">
+                            <button class="sort-button" data-sort="overall_matchup_wr">Matchup WR</button>
+                            <button class="sort-button" data-sort="overall_matchup_delta">Matchup Delta</button>
+                        </div>
+                    </div>
+                </th>
+                
+                <th>
+                    <div class="column-header">
+                        <div class="button-group">
+                            <button class="sort-button active" data-sort="combined_score">Combined Score</button>
+                            <button class="sort-button" data-sort="overall_wr">Overall WR</button>
+                            <button class="sort-button" data-sort="overall_delta">Overall Delta</button>
+                        </div>
+                    </div>
+                </th>
+                
+                <th>
+                    <div class="column-header">
+                        <div class="button-group">
+                            <button class="sort-button" data-sort="overall_synergy_wr">Synergy WR</button>
+                            <button class="sort-button" data-sort="overall_synergy_delta">Synergy Delta</button>
+                        </div>
+                    </div>
+                </th>
+                
+                {% for ally in ally_team %}
+                <th>
+                    <div class="champion-header">
+                        {% if ally.0|champion_icon_url %}
+                            <img src="{{ ally.0|champion_icon_url }}" alt="{{ ally.0 }}" class="champion-icon">
+                        {% endif %}
+                        <img src="{{ ally.1|role_icon_url }}" alt="{{ ally.1 }}" class="role-icon">
+                    </div>
+                </th>
+                {% endfor %}
+    </tr>
+        </thead>
+        <tbody>
+            {% for rec in recommendations %}
+            <tr>
+                {# Enemy matchups #}
+                {% for enemy in enemy_team %}
+                <td>
+                    {% with enemy_stats=rec.matchup_wr_per_champ|get_item:enemy.0 %}
+                    {% if enemy_stats %}
+                        <div class="winrate stat-value" 
+                             title="{{ rec.champion }} vs {{ enemy.0 }} ({{ enemy.1 }}): {{ enemy_stats.winrate|floatformat:2 }}% winrate in {{ enemy_stats.sample_size }} games">
+                            {{ enemy_stats.winrate|floatformat:2 }}
+                        </div>
+                        <div class="{% if enemy_stats.delta_wr >= 0 %}delta-positive{% else %}delta-negative{% endif %} stat-value"
+                             title="Δ vs {{ enemy.0 }}: {{ enemy_stats.delta_wr|stringformat:"+.2f" }}% compared to base winrate">
+                            {{ enemy_stats.delta_wr|stringformat:"+.2f" }}
+                        </div>
+                        <div class="sample-size {% if enemy_stats.sample_size < 300 %}low{% endif %}"
+                             title="{{ enemy_stats.sample_size }} games analyzed">
+                            ({{ enemy_stats.sample_size }})
+                        </div>
+                    {% else %}
+                        -
+                    {% endif %}
+                    {% endwith %}
+                </td>
+                {% endfor %}
+                
+                {# Matchup WR #}
+                <td>
+                    <div class="winrate stat-value"
+                         title="Average vs {{ enemy_team|length }} enemies: {{ rec.overall_matchup_wr|floatformat:2 }}%">
+                        {{ rec.overall_matchup_wr|floatformat:2 }}
+                    </div>
+                    <div class="{% if rec.overall_matchup_delta >= 0 %}delta-positive{% else %}delta-negative{% endif %} stat-value"
+                         title="Total Δ vs enemies: {{ rec.overall_matchup_delta|stringformat:"+.2f" }}%">
+                        {{ rec.overall_matchup_delta|stringformat:"+.2f" }}
+                    </div>
+                </td>
+                
+                {# Champion and Overall WR #}
+                <td class="champion-cell">
+                    {% if rec.champion|champion_icon_url %}
+                        <img src="{{ rec.champion|champion_icon_url }}" 
+                             alt="{{ rec.champion }}" 
+                             class="champion-icon" 
+                             data-low-sample="{{ rec.low_sample_count }}"
+                             title="{{ rec.champion }} overall stats">
+                    {% endif %}
+                    <div class="champion-stats">
+                        <div class="winrate stat-value"
+                             title="Base winrate: {{ rec.overall_wr|floatformat:2 }}%">
+                            {{ rec.overall_wr|floatformat:2 }}
+                        </div>
+                        <div class="{% if rec.overall_delta >= 0 %}delta-positive{% else %}delta-negative{% endif %} stat-value"
+                             title="Total Δ from all interactions: {{ rec.overall_delta|stringformat:"+.2f" }}%">
+                            {{ rec.overall_delta|stringformat:"+.2f" }}
+                        </div>
+                        <div class="low-samples">0.0%</div>
+                    </div>
+                </td>
+                
+                {# Synergy WR #}
+                <td>
+                    <div class="winrate stat-value"
+                         title="Average with {{ ally_team|length }} allies: {{ rec.overall_synergy_wr|floatformat:2 }}%">
+                        {{ rec.overall_synergy_wr|floatformat:2 }}
+                    </div>
+                    <div class="${rec.overall_synergy_delta >= 0 ? 'delta-positive' : 'delta-negative'} stat-value"
+                         title="Total Δ with allies: ${rec.overall_synergy_delta >= 0 ? '+' : ''}${rec.overall_synergy_delta.toFixed(2)}%">
+                        ${rec.overall_synergy_delta >= 0 ? '+' : ''}${rec.overall_synergy_delta.toFixed(2)}
+                    </div>
+                </td>
+                
+                {# Ally synergies #}
+                {% for ally in ally_team %}
+                <td>
+                    {% with ally_stats=rec.synergy_wr_per_champ|get_item:ally.0 %}
+                    {% if ally_stats %}
+                        <div class="winrate stat-value" 
+                             title="{{ rec.champion }} with {{ ally.0 }} ({{ ally.1 }}): {{ ally_stats.winrate|floatformat:2 }}% winrate in {{ ally_stats.sample_size }} games">
+                            {{ ally_stats.winrate|floatformat:2 }}
+                        </div>
+                        <div class="${ally_stats.delta_wr >= 0 ? 'delta-positive' : 'delta-negative'} stat-value"
+                             title="Δ with {{ ally.0 }}: ${ally_stats.delta_wr >= 0 ? '+' : ''}${ally_stats.delta_wr.toFixed(2)}% compared to base winrate">
+                            ${ally_stats.delta_wr >= 0 ? '+' : ''}${ally_stats.delta_wr.toFixed(2)}
+                        </div>
+                        <div class="sample-size ${ally_stats.sample_size < 300 ? 'low' : ''}"
+                             title="${ally_stats.sample_size} games analyzed">
+                            (${ally_stats.sample_size})
+                        </div>
+                    {% else %}
+                        -
+                    {% endif %}
+                    {% endwith %}
+                </td>
+                {% endfor %}
+    </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script type="text/javascript">
+    // Wrap in IIFE to avoid global scope pollution
+    (function() {
+        // Debug flag and logging function must be defined first
+        const DEBUG = true;
+
+        function debugLog(...args) {
+            if (DEBUG) {
+                console.log('[DEBUG]', ...args);
+            }
+        }
+
+        // Add lastData variable to track changes
+        let lastData = null;
+
+        // Helper function to decode HTML entities
+        function decodeHtmlEntities(text) {
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = text;
+            return textarea.value;
+        }
+
+        // Champion ID mapping with decoded names
+        const championIds = {
+            {% for champ in champion_list %}
+            '{{ champ.name|escapejs }}': {{ champ.champion_id }},
+            {% endfor %}
+        };
+
+        // Log champion mappings when initialized
+        debugLog('Loaded champion mappings:', championIds);
+
+        // Helper function to compare data
+        function hasDataChanged(newData, oldData) {
+            if (!oldData) return true;
+            
+            // Compare team compositions
+            if (newData.enemy_team.length !== oldData.enemy_team.length ||
+                newData.ally_team.length !== oldData.ally_team.length) {
+                
+                // If this update brings us to 10 champions, allow the update
+                const totalChampions = newData.enemy_team.length + newData.ally_team.length;
+                if (totalChampions === 10) {
+                    debugLog('Reached 10 champions, allowing final update');
+                    // Schedule the interval clear for after this update
+                    setTimeout(() => {
+                        if (window.pollInterval) {
+                            debugLog('Stopping updates after final update');
+                            clearInterval(window.pollInterval);
+                            window.pollInterval = null;
+                        }
+                    }, 0);
+                }
+                return true;
+            }
+
+            // If we already have 10 champions, stop updates
+            const totalChampions = newData.enemy_team.length + newData.ally_team.length;
+            if (totalChampions === 10) {
+                debugLog('Already at 10 champions, stopping updates');
+                if (window.pollInterval) {
+                    clearInterval(window.pollInterval);
+                    window.pollInterval = null;
+                }
+                return false;
+            }
+
+            // Compare enemy team
+            for (let i = 0; i < newData.enemy_team.length; i++) {
+                if (newData.enemy_team[i][0] !== oldData.enemy_team[i][0] ||
+                    newData.enemy_team[i][1] !== oldData.enemy_team[i][1]) {
+                    return true;
+                }
+            }
+
+            // Compare ally team
+            for (let i = 0; i < newData.ally_team.length; i++) {
+                if (newData.ally_team[i][0] !== oldData.ally_team[i][0] ||
+                    newData.ally_team[i][1] !== oldData.ally_team[i][1]) {
+                    return true;
+                }
+            }
+
+            // Compare assigned role
+            if (newData.assigned_role !== oldData.assigned_role) {
+                return true;
+            }
+
+            return false;
+        }
+
+        // Helper function to get champion icon URL
+        function getChampionIconUrl(championName) {
+            debugLog('Getting icon URL for champion:', championName);
+            // Decode the champion name before lookup
+            const decodedName = decodeHtmlEntities(championName);
+            const championId = championIds[decodedName];
+            debugLog(`Looking up ID for ${decodedName}:`, championId);
+            
+            if (!championId) {
+                console.error(`No ID found for champion: ${decodedName}`);
+                // Log all available champions to help debug
+                console.error('Available champions:', 
+                    Object.keys(championIds)
+                        .map(decodeHtmlEntities)
+                        .sort()
+                );
+                return '';
+            }
+            const url = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${championId}.png`;
+            debugLog('Generated URL:', url);
+            return url;
+        }
+
+        // Helper function to get role icon URL
+        function getRoleIconUrl(role) {
+            // Map role names to CDragon role names
+            const roleMap = {
+                'top': 'top',
+                'jungle': 'jungle',
+                'middle': 'middle',
+                'bottom': 'bottom',
+                'support': 'utility'
+            };
+            
+            const cdragonRole = roleMap[role.toLowerCase()] || role.toLowerCase();
+            return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-${cdragonRole}.png`;
+        }
+
+        // Color gradient function
+        function getGradientColor(value, isWinrate = false) {
+            if (isWinrate) value -= 50;
+            
+            if (value <= -3) return "#FF4444";
+            if (value >= 6) return "#00BFFF";
+            
+            if (value < 0) {
+                const t = (value + 3) / 3;
+                const r = 255;
+                const g = Math.floor(68 + (165 * t));
+                return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}44`;
+            }
+            
+            if (value < 3) {
+                const t = value / 3;
+                const r = Math.floor(255 * (1 - t));
+                const g = 205 + Math.floor(50 * t);
+                return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}32`;
+            }
+            
+            const t = (value - 3) / 3;
+            const g = 205 - Math.floor(100 * t);
+            const b = 50 + Math.floor(175 * t);
+            return `#00${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+        }
+
+        // Update stat colors
+        function updateStatColors() {
+            document.querySelectorAll('.winrate').forEach(el => {
+                const value = parseFloat(el.textContent);
+                el.style.color = getGradientColor(value, true);
+            });
+
+            document.querySelectorAll('.delta-positive, .delta-negative').forEach(el => {
+                const value = parseFloat(el.textContent);
+                el.style.color = getGradientColor(value, false);
+            });
+
+            // Update champion column icon borders based on low sample count
+            document.querySelectorAll('.champion-cell .champion-icon').forEach(icon => {
+                const row = icon.closest('tr');
+                const cells = Array.from(row.cells);
+                
+                // Get enemy and ally cells (exclude the three middle columns)
+                const enemyAndAllyCells = cells.filter((cell, index) => {
+                    const totalCols = cells.length;
+                    const enemyAndAllyCount = totalCols - 3; // Exclude Matchup, Champion, and Synergy columns
+                    const isMiddleColumn = index >= enemyAndAllyCount/2 && index < enemyAndAllyCount/2 + 3;
+                    return !isMiddleColumn;
+                });
+
+                // Count cells with no data or low samples
+                const totalChampions = enemyAndAllyCells.length;
+                const lowSampleCells = enemyAndAllyCells.filter(cell => {
+                    const content = cell.textContent.trim();
+                    return content === '-' || cell.querySelector('.sample-size.low');
+                }).length;
+                
+                const lowSamplePercentage = (lowSampleCells / totalChampions) * 100;
+                
+                debugLog('Low sample calculation:', {
+                    totalChampions,
+                    lowSampleCells,
+                    percentage: lowSamplePercentage
+                });
+
+                // Update the low-samples display
+                const lowSamplesDiv = icon.closest('.champion-cell').querySelector('.low-samples');
+                if (lowSamplesDiv) {
+                    lowSamplesDiv.textContent = `${lowSamplePercentage.toFixed(1)}%`;
+                }
+
+                // Update the border color
+                icon.style.borderColor = getLowSampleBorderColor(lowSamplePercentage);
+            });
+        }
+
+        // Get initial data from Django template
+        const initialData = {
+            assigned_role: "{{ assigned_role|default:'None' }}",
+            enemy_team: {{ enemy_team|safe|default:'[]' }},
+            ally_team: {{ ally_team|safe|default:'[]' }},
+            recommendations: {{ recommendations|safe|default:'[]' }}
+        };
+
+        // Store the interval ID globally so we can clear it
+        let pollInterval;
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            debugLog('Page loaded');
+            
+            // Update with initial data
+            if (initialData) {
+                updatePage(initialData);
+                lastData = JSON.parse(JSON.stringify(initialData)); // Deep copy
+            }
+            
+            // Start polling and store the interval ID
+            window.pollInterval = setInterval(fetchLatestData, 500);
+            
+            // Cleanup on unload
+            window.addEventListener('unload', () => {
+                if (window.pollInterval) {
+                    clearInterval(window.pollInterval);
+                }
+            });
+        });
+
+        async function fetchLatestData() {
+            debugLog('Starting fetchLatestData');
+            try {
+                // Get current role from URL path
+                const pathParts = window.location.pathname.split('/');
+                const role = pathParts[pathParts.length - 2];  // Get second to last part of URL
+                
+                const response = await fetch(`/test_cache/{{ session_id }}/${role ? role + '/' : ''}`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    cache: 'no-store'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                debugLog('Response:', result);
+                
+                if (result.has_data && result.data) {
+                    // Check if data has changed
+                    if (hasDataChanged(result.data, lastData)) {
+                        debugLog('Data changed, updating page');
+                        updatePage(result.data);
+                        lastData = JSON.parse(JSON.stringify(result.data)); // Deep copy
+                    } else {
+                        debugLog('No changes in data, skipping update');
+                    }
+                }
+            } catch (error) {
+                console.error('Error in fetchLatestData:', error);
+            }
+        }
+
+        function updatePage(data) {
+            debugLog('Starting page update');
+            
+            // Update page title
+            const pageTitle = document.querySelector('.page-title');
+            if (pageTitle) {
+                const roleIconUrl = getRoleIconUrl(data.assigned_role || 'unknown');
+                pageTitle.innerHTML = `
+                    Recommendations for 
+                    ${data.assigned_role ? `
+                        <img src="${roleIconUrl}" alt="${data.assigned_role}" class="role-icon">
+                        ${data.assigned_role.charAt(0).toUpperCase() + data.assigned_role.slice(1)}
+                    ` : 'Unknown Role'}
+                `;
+            }
+
+            // Update table structure
+            const table = document.querySelector('#recommendations-table');
+            if (!table) {
+                debugLog('ERROR: Could not find recommendations table');
+                return;
+            }
+
+            // Update table header
+            const thead = table.querySelector('thead') || table.createTHead();
+            thead.innerHTML = `
+                <tr>
+                    ${data.enemy_team.map(enemy => `
+                        <th>
+                            <div class="champion-header">
+                                <img src="${getChampionIconUrl(enemy[0])}" alt="${enemy[0]}" class="champion-icon">
+                                <img src="${getRoleIconUrl(enemy[1])}" alt="${enemy[1]}" class="role-icon">
+                            </div>
+                        </th>
+                    `).join('')}
+                    
+                    <th>
+                        <div class="column-header">
+                            <div class="button-group">
+                                <button class="sort-button" data-sort="overall_matchup_wr">Matchup WR</button>
+                                <button class="sort-button" data-sort="overall_matchup_delta">Matchup Delta</button>
+                            </div>
+                        </div>
+                    </th>
+                    
+                    <th>
+                        <div class="column-header">
+                            <div class="button-group">
+                                <button class="sort-button" data-sort="combined_score">Combined Score</button>
+                                <button class="sort-button" data-sort="overall_wr">Overall WR</button>
+                                <button class="sort-button" data-sort="overall_delta">Overall Delta</button>
+                            </div>
+                        </div>
+                    </th>
+                    
+                    <th>
+                        <div class="column-header">
+                            <div class="button-group">
+                                <button class="sort-button" data-sort="overall_synergy_wr">Synergy WR</button>
+                                <button class="sort-button" data-sort="overall_synergy_delta">Synergy Delta</button>
+                            </div>
+                        </div>
+                    </th>
+
+                    ${data.ally_team.map(ally => `
+                        <th>
+                            <div class="champion-header">
+                                <img src="${getChampionIconUrl(ally[0])}" alt="${ally[0]}" class="champion-icon">
+                                <img src="${getRoleIconUrl(ally[1])}" alt="${ally[1]}" class="role-icon">
+                            </div>
+                        </th>
+                    `).join('')}
+                </tr>
+            `;
+
+            debugLog('Calling updateTable');
+            updateTable(data);
+            debugLog('Page update complete');
+
+            // Add click handlers for sort buttons after updating the table
+            document.querySelectorAll('.sort-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    sortTable(this.dataset.sort, true);
+                });
+
+                // Set initial active state if this is the default sort
+                if (button.dataset.sort === currentSortBy) {
+                    button.classList.add('active');
+                }
+            });
+        }
+
+        // Keep track of current sort state
+        let currentSortBy = 'combined_score'; // Default sort
+
+        // Function to update table with new data
+        function updateTable(data) {
+            debugLog('Updating table with new data');
+            const tbody = document.querySelector('#recommendations-table tbody');
+            tbody.innerHTML = '';
+
+            // Create rows for each recommendation
+            data.recommendations.forEach(rec => {
+                const tr = document.createElement('tr');
+                let html = '';
+
+                // Enemy matchups
+                data.enemy_team.forEach(enemy => {
+                    const enemyStats = rec.matchup_wr_per_champ[enemy[0]];
+                    html += `
+                        <td>
+                            ${enemyStats ? `
+                                <div class="winrate stat-value" 
+                                     title="${rec.champion} vs ${enemy[0]} (${enemy[1]}): ${enemyStats.winrate.toFixed(2)}% winrate in ${enemyStats.sample_size} games">
+                                    ${enemyStats.winrate.toFixed(2)}
+                                </div>
+                                <div class="${enemyStats.delta_wr >= 0 ? 'delta-positive' : 'delta-negative'} stat-value"
+                                     title="Δ vs ${enemy[0]}: ${enemyStats.delta_wr >= 0 ? '+' : ''}${enemyStats.delta_wr.toFixed(2)}% compared to base winrate">
+                                    ${enemyStats.delta_wr >= 0 ? '+' : ''}${enemyStats.delta_wr.toFixed(2)}
+                                </div>
+                                <div class="sample-size ${enemyStats.sample_size < 300 ? 'low' : ''}"
+                                     title="${enemyStats.sample_size} games analyzed">
+                                    (${enemyStats.sample_size})
+                                </div>
+                            ` : '-'}
+                        </td>
+                    `;
+                });
+
+                // Matchup WR
+                html += `
+                    <td>
+                        <div class="winrate stat-value"
+                             title="Average vs ${data.enemy_team.length} enemies: ${rec.overall_matchup_wr.toFixed(2)}%">
+                            ${rec.overall_matchup_wr.toFixed(2)}
+                        </div>
+                        <div class="${rec.overall_matchup_delta >= 0 ? 'delta-positive' : 'delta-negative'} stat-value"
+                             title="Total Δ vs enemies: ${rec.overall_matchup_delta >= 0 ? '+' : ''}${rec.overall_matchup_delta.toFixed(2)}%">
+                            ${rec.overall_matchup_delta >= 0 ? '+' : ''}${rec.overall_matchup_delta.toFixed(2)}
+                        </div>
+                    </td>
+                `;
+
+                // Champion and Overall WR
+                html += `
+                    <td class="champion-cell">
+                        ${rec.champion ? `
+                            <img src="${getChampionIconUrl(rec.champion)}" 
+                                alt="${rec.champion}" 
+                                class="champion-icon" 
+                                data-low-sample="${rec.low_sample_count}"
+                                title="${rec.champion} overall stats">
+                        ` : ''}
+                        <div class="champion-stats">
+                            <div class="winrate stat-value"
+                                 title="Base winrate: ${rec.overall_wr.toFixed(2)}%">
+                                ${rec.overall_wr.toFixed(2)}
+                            </div>
+                            <div class="${rec.overall_delta >= 0 ? 'delta-positive' : 'delta-negative'} stat-value"
+                                 title="Total Δ from all interactions: ${rec.overall_delta >= 0 ? '+' : ''}${rec.overall_delta.toFixed(2)}%">
+                                ${rec.overall_delta >= 0 ? '+' : ''}${rec.overall_delta.toFixed(2)}
+                            </div>
+                            <div class="low-samples">0.0%</div>
+                        </div>
+                    </td>
+                `;
+
+                // Synergy WR
+                html += `
+                    <td>
+                        <div class="winrate stat-value"
+                             title="Average with ${data.ally_team.length} allies: ${rec.overall_synergy_wr.toFixed(2)}%">
+                            ${rec.overall_synergy_wr.toFixed(2)}
+                        </div>
+                        <div class="${rec.overall_synergy_delta >= 0 ? 'delta-positive' : 'delta-negative'} stat-value"
+                             title="Total Δ with allies: ${rec.overall_synergy_delta >= 0 ? '+' : ''}${rec.overall_synergy_delta.toFixed(2)}%">
+                            ${rec.overall_synergy_delta >= 0 ? '+' : ''}${rec.overall_synergy_delta.toFixed(2)}
+                        </div>
+                    </td>
+                `;
+
+                // Ally synergies
+                data.ally_team.forEach(ally => {
+                    const allyStats = rec.synergy_wr_per_champ[ally[0]];
+                    html += `
+                        <td>
+                            ${allyStats ? `
+                                <div class="winrate stat-value" 
+                                     title="${rec.champion} with ${ally[0]} (${ally[1]}): ${allyStats.winrate.toFixed(2)}% winrate in ${allyStats.sample_size} games">
+                                    ${allyStats.winrate.toFixed(2)}
+                                </div>
+                                <div class="${allyStats.delta_wr >= 0 ? 'delta-positive' : 'delta-negative'} stat-value"
+                                     title="Δ with ${ally[0]}: ${allyStats.delta_wr >= 0 ? '+' : ''}${allyStats.delta_wr.toFixed(2)}% compared to base winrate">
+                                    ${allyStats.delta_wr >= 0 ? '+' : ''}${allyStats.delta_wr.toFixed(2)}
+                                </div>
+                                <div class="sample-size ${allyStats.sample_size < 300 ? 'low' : ''}"
+                                     title="${allyStats.sample_size} games analyzed">
+                                    (${allyStats.sample_size})
+                                </div>
+                            ` : '-'}
+                        </td>
+                    `;
+                });
+
+                tr.innerHTML = html;
+                tbody.appendChild(tr);
+            });
+
+            // After adding new data, sort by the last selected criteria
+            if (currentSortBy) {
+                sortTable(currentSortBy, false); // false means don't update button state
+                
+                // Restore the active state on the correct button
+                document.querySelectorAll('.sort-button').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.sort === currentSortBy) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
+
+            // Update colors after adding new data
+            updateStatColors();
+        }
+
+        // Define column indices at the top level
+        function getColumnIndices() {
+            const thead = document.querySelector('#recommendations-table thead');
+            const headerRow = thead.querySelector('tr');
+            const headers = Array.from(headerRow.cells);
+            
+            // Find indices by looking for specific header content
+            const matchupIndex = headers.findIndex(cell => cell.textContent.includes('Matchup WR'));
+            const championIndex = headers.findIndex(cell => cell.textContent.includes('Combined Score'));
+            const synergyIndex = headers.findIndex(cell => cell.textContent.includes('Synergy WR'));
+            
+            debugLog('Column indices:', {
+                numHeaders: headers.length,
+                matchupIndex,
+                championIndex,
+                synergyIndex,
+                headerContents: headers.map(h => h.textContent.trim())
+            });
+
+            return {
+                'overall_matchup_wr': matchupIndex,
+                'overall_matchup_delta': matchupIndex,
+                'overall_wr': championIndex,
+                'overall_delta': championIndex,
+                'overall_synergy_wr': synergyIndex,
+                'overall_synergy_delta': synergyIndex,
+                'combined_score': championIndex
+            };
+        }
+
+        // Sorting function
+        function sortTable(sortBy, updateButton = true) {
+            debugLog('Sorting table by:', sortBy);
+            const tbody = document.querySelector('#recommendations-table tbody');
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+            
+            const columnIndices = getColumnIndices();
+            const columnIndex = columnIndices[sortBy];
+            
+            debugLog('Column information:', {
+                sortBy,
+                columnIndex,
+                allIndices: columnIndices
+            });
+
+            if (columnIndex === undefined || columnIndex === -1) {
+                console.error('Invalid sort type or column not found:', sortBy);
+                return;
+            }
+
+            // Sort the rows
+            rows.sort((rowA, rowB) => {
+                const cellA = rowA.cells[columnIndex];
+                const cellB = rowB.cells[columnIndex];
+                
+                let valueA = 0, valueB = 0;
+                
+                try {
+                    if (sortBy === 'combined_score') {
+                        // Get overall WR and delta values to calculate combined score
+                        const wrA = parseFloat(cellA.querySelector('.winrate.stat-value').textContent);
+                        const deltaA = parseFloat(cellA.querySelector('.delta-positive, .delta-negative').textContent);
+                        const wrB = parseFloat(cellB.querySelector('.winrate.stat-value').textContent);
+                        const deltaB = parseFloat(cellB.querySelector('.delta-positive, .delta-negative').textContent);
+                        
+                        // Calculate combined scores
+                        valueA = wrA + deltaA;
+                        valueB = wrB + deltaB;
+                        
+                        debugLog('Combined Score Calculation:', {
+                            champion: cellA.querySelector('.champion-icon')?.alt,
+                            wrA, deltaA, combinedA: valueA,
+                            wrB, deltaB, combinedB: valueB
+                        });
+                    } else if (sortBy.includes('delta')) {
+                        const deltaA = cellA.querySelector('.delta-positive, .delta-negative')?.textContent.trim().replace('+', '');
+                        const deltaB = cellB.querySelector('.delta-positive, .delta-negative')?.textContent.trim().replace('+', '');
+                        valueA = deltaA ? parseFloat(deltaA) : 0;
+                        valueB = deltaB ? parseFloat(deltaB) : 0;
+                    } else {
+                        const wrA = cellA.querySelector('.winrate.stat-value')?.textContent.trim();
+                        const wrB = cellB.querySelector('.winrate.stat-value')?.textContent.trim();
+                        valueA = wrA ? parseFloat(wrA) : 0;
+                        valueB = wrB ? parseFloat(wrB) : 0;
+                    }
+                    
+                    debugLog(`Comparing values for ${sortBy}:`, {
+                        cellAHTML: cellA.innerHTML,
+                        cellBHTML: cellB.innerHTML,
+                        valueA: valueA,
+                        valueB: valueB
+                    });
+                    
+                    if (isNaN(valueA)) valueA = 0;
+                    if (isNaN(valueB)) valueB = 0;
+                    
+                    return valueB - valueA; // Sort in descending order
+                } catch (error) {
+                    console.error('Error comparing values:', error);
+                    console.error('CellA:', cellA);
+                    console.error('CellB:', cellB);
+                    return 0;
+                }
+            });
+
+            // Update button states only if requested
+            if (updateButton) {
+                document.querySelectorAll('.sort-button').forEach(btn => btn.classList.remove('active'));
+                document.querySelector(`[data-sort="${sortBy}"]`).classList.add('active');
+            }
+
+            // Store current sort type
+            currentSortBy = sortBy;
+
+            // Reorder rows
+            rows.forEach(row => tbody.appendChild(row));
+            updateStatColors();
+        }
+
+        // Update the border color calculation function
+        function getLowSampleBorderColor(percentage) {
+            debugLog('Calculating border color for percentage:', percentage);
+            
+            if (percentage <= 30) {
+                return '#00ff00'; // Pure green
+            } else if (percentage <= 40) {
+                // Gradient from green to yellow
+                const factor = (percentage - 30) / 10; // 0 to 1
+                const red = Math.floor(255 * factor);
+                const green = 255;
+                const blue = 0;
+                const color = `rgb(${red}, ${green}, ${blue})`;
+                debugLog('Green to Yellow gradient:', { percentage, factor, color });
+                return color;
+            } else if (percentage <= 50) {
+                // Gradient from yellow to red
+                const factor = (percentage - 40) / 10; // 0 to 1
+                const red = 255;
+                const green = Math.floor(255 * (1 - factor));
+                const blue = 0;
+                const color = `rgb(${red}, ${green}, ${blue})`;
+                debugLog('Yellow to Red gradient:', { percentage, factor, color });
+                return color;
+            } else {
+                return '#ff0000'; // Pure red
+            }
+        }
+    })();
+</script>
+{% endblock %}

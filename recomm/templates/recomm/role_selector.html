@@ -1,0 +1,67 @@
+{% extends 'recomm/base.html' %}
+{% load recomm_extras %}
+
+{% block extra_styles %}
+<style>
+    .role-selector {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px;
+    }
+
+    .title {
+        font-size: 24px;
+        margin-bottom: 40px;
+        color: #fff;
+        text-align: center;
+    }
+
+    .roles-container {
+        display: flex;
+        gap: 40px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .role-link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-decoration: none;
+        color: #fff;
+        transition: transform 0.2s;
+    }
+
+    .role-link:hover {
+        transform: scale(1.1);
+    }
+
+    .role-icon {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 10px;
+    }
+
+    .role-name {
+        font-size: 18px;
+        text-transform: capitalize;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="role-selector">
+    <div class="title">
+        Select your role to see recommendations
+    </div>
+    <div class="roles-container">
+        {% for role in roles %}
+        <a href="{% url 'recommendations' session_id role %}" class="role-link">
+            <img src="{{ role|role_icon_url }}" alt="{{ role }}" class="role-icon">
+            <span class="role-name">{{ role }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %} 

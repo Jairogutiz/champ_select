@@ -1,0 +1,486 @@
+{% load recomm_extras %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Recommendations</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            font-size: 14px;
+        }
+        th {
+            background-color: #1a1a1a;
+            color: #fff;
+            padding: 15px 8px;
+            vertical-align: top;
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #0a0a0a;
+            color: #fff;
+        }
+        .winrate {
+            color: #00ff00;
+        }
+        .delta-positive {
+            color: #00ff00;
+        }
+        .delta-negative {
+            color: #ff0000;
+        }
+        .sample-size {
+            color: #888;
+            font-size: 12px;
+        }
+        .champion-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .low-samples {
+            color: #ff9900;
+            font-size: 12px;
+        }
+        .champion-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+        
+        .champion-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .champion-header img {
+            width: 48px;
+            height: 48px;
+            border-radius: 5px;
+        }
+        
+        .role-text {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .champion-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .sort-button {
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 4px 8px;
+            width: 100%;
+            text-align: center;
+            transition: all 0.2s;
+            font-size: 14px;
+            border-radius: 4px;
+            position: relative;
+        }
+        
+        .sort-button:hover {
+            background-color: #3a3a3a;
+        }
+        
+        .sort-button.active {
+            background-color: #4a4a4a;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);  /* Green glow */
+            color: #00ff00;  /* Green text when active */
+        }
+        
+        .sort-button.active::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, #00ff00, #00ffff);  /* Gradient underline */
+        }
+        
+        .column-header {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .stat-value {
+            font-weight: 600;  /* Make numbers bolder */
+            font-size: 15px;   /* Slightly larger */
+            text-shadow: 0 0 2px rgba(0,0,0,0.5);  /* Add subtle shadow for better readability */
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;  /* Modern font */
+        }
+        
+        .role-icon {
+            width: 24px;
+            height: 24px;
+            filter: brightness(0.8);
+        }
+        
+        .champion-header img.champion-icon {  /* Make header champion icons larger */
+            width: 96px;  /* Doubled from 48px */
+            height: 96px;
+            border-radius: 8px;  /* Increased border radius for larger size */
+        }
+        
+        .champion-role {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .sample-size.low {
+            color: #ff4444;  /* Red color for low sample size */
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body style="background-color: #000; color: #fff;">
+    <h1>Debug Recommendations</h1>
+    
+    <div class="debug-section">
+        <h2>Input Data</h2>
+        <h3>Assigned Role: {{ assigned_role }}</h3>
+        
+        <h3>Enemy Team:</h3>
+        <ul>
+        {% for champ, role in enemy_team %}
+            <li>{{ champ }} ({{ role }})</li>
+        {% endfor %}
+        </ul>
+        
+        <h3>Ally Team:</h3>
+        <ul>
+        {% for champ, role in ally_team %}
+            <li>{{ champ }} ({{ role }})</li>
+        {% endfor %}
+        </ul>
+    </div>
+
+    <div class="debug-section">
+        <h2>Recommendations</h2>
+        
+        <table id="recommendations-table">
+            <thead>
+                <tr>
+                    {% for enemy in enemy_team %}
+                    <th>
+                        <div class="champion-header">
+                            {% if enemy.0|champion_icon_url %}
+                                <img src="{{ enemy.0|champion_icon_url }}" alt="{{ enemy.0 }}" class="champion-icon">
+                            {% endif %}
+                            <img src="{{ enemy.1|role_icon_url }}" alt="{{ enemy.1 }}" class="role-icon">
+                        </div>
+                    </th>
+                    {% endfor %}
+                    
+                    <th>
+                        <div class="column-header">
+                            <div class="button-group">
+                                <button class="sort-button" data-sort="overall_matchup_wr">Matchup WR</button>
+                                <button class="sort-button" data-sort="overall_matchup_delta">Matchup Delta</button>
+                            </div>
+                        </div>
+                    </th>
+                    
+                    <th>
+                        <div class="column-header">
+                            <div class="button-group">
+                                <button class="sort-button" data-sort="combined_score">Combined Score</button>
+                                <button class="sort-button" data-sort="overall_wr">Overall WR</button>
+                                <button class="sort-button" data-sort="overall_delta">Overall Delta</button>
+                            </div>
+                        </div>
+                    </th>
+                    
+                    <th>
+                        <div class="column-header">
+                            <div class="button-group">
+                                <button class="sort-button" data-sort="overall_synergy_wr">Synergy WR</button>
+                                <button class="sort-button" data-sort="overall_synergy_delta">Synergy Delta</button>
+                            </div>
+                        </div>
+                    </th>
+                    
+                    {% for ally in ally_team %}
+                    <th>
+                        <div class="champion-header">
+                            {% if ally.0|champion_icon_url %}
+                                <img src="{{ ally.0|champion_icon_url }}" alt="{{ ally.0 }}" class="champion-icon">
+                            {% endif %}
+                            <img src="{{ ally.1|role_icon_url }}" alt="{{ ally.1 }}" class="role-icon">
+                        </div>
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for rec in recommendations %}
+                <tr>
+                    {# Enemy matchups #}
+                    {% for enemy in enemy_team %}
+                    <td>
+                        {% with enemy_stats=rec.matchup_wr_per_champ|get_item:enemy.0 %}
+                        {% if enemy_stats %}
+                            <div class="winrate stat-value">{{ enemy_stats.winrate|floatformat:2 }}</div>
+                            <div class="{% if enemy_stats.delta_wr >= 0 %}delta-positive{% else %}delta-negative{% endif %} stat-value">
+                                {{ enemy_stats.delta_wr|stringformat:"+.2f" }}
+                            </div>
+                            <div class="sample-size {% if enemy_stats.sample_size < 300 %}low{% endif %}">
+                                ({{ enemy_stats.sample_size }})
+                            </div>
+                        {% else %}
+                            -
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                    {% endfor %}
+                    
+                    {# Matchup WR #}
+                    <td>
+                        <div class="winrate stat-value">{{ rec.overall_matchup_wr|floatformat:2 }}</div>
+                        <div class="{% if rec.overall_matchup_delta >= 0 %}delta-positive{% else %}delta-negative{% endif %} stat-value">
+                            {{ rec.overall_matchup_delta|stringformat:"+.2f" }}
+                        </div>
+                    </td>
+                    
+                    {# Champion and Overall WR #}
+                    <td class="champion-cell">
+                        {% if rec.champion|champion_icon_url %}
+                            <img src="{{ rec.champion|champion_icon_url }}" alt="{{ rec.champion }}" class="champion-icon">
+                        {% endif %}
+                        <div class="winrate stat-value">{{ rec.overall_wr|floatformat:2 }}</div>
+                        <div class="{% if rec.overall_delta >= 0 %}delta-positive{% else %}delta-negative{% endif %} stat-value">
+                            {{ rec.overall_delta|stringformat:"+.2f" }}
+                        </div>
+                        {% if rec.low_sample_count > 0 %}
+                        <div class="low-samples">{{ rec.low_sample_count }}0.0%</div>
+                        {% else %}
+                        <div class="low-samples">0.0%</div>
+                        {% endif %}
+                        <div style="font-size: 10px; color: #666;">(Score: {{ rec.combined_score|floatformat:2 }})</div>
+                    </td>
+                    
+                    {# Synergy WR #}
+                    <td>
+                        <div class="winrate stat-value">{{ rec.overall_synergy_wr|floatformat:2 }}</div>
+                        <div class="{% if rec.overall_synergy_delta >= 0 %}delta-positive{% else %}delta-negative{% endif %} stat-value">
+                            {{ rec.overall_synergy_delta|stringformat:"+.2f" }}
+                        </div>
+                    </td>
+                    
+                    {# Ally synergies #}
+                    {% for ally in ally_team %}
+                    <td>
+                        {% with ally_stats=rec.synergy_wr_per_champ|get_item:ally.0 %}
+                        {% if ally_stats %}
+                            <div class="winrate stat-value">{{ ally_stats.winrate|floatformat:2 }}</div>
+                            <div class="{% if ally_stats.delta_wr >= 0 %}delta-positive{% else %}delta-negative{% endif %} stat-value">
+                                {{ ally_stats.delta_wr|stringformat:"+.2f" }}
+                            </div>
+                            <div class="sample-size {% if ally_stats.sample_size < 300 %}low{% endif %}">
+                                ({{ ally_stats.sample_size }})
+                            </div>
+                        {% else %}
+                            -
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="debug-section">
+        <h2>Raw Test Data</h2>
+        <pre>{{ test_data|pprint }}</pre>
+    </div>
+
+    <script>
+        function getGradientColor(value, isWinrate = false) {
+            if (isWinrate) {
+                value -= 50;  // Convert winrate to delta scale
+            }
+            
+            // Handle extreme values
+            if (value <= -3) return "#FF4444";  // Bright red
+            if (value >= 6) return "#00BFFF";   // Electric blue
+            
+            // Red to Orange transition (-3 to 0)
+            if (value < 0) {
+                const t = (value + 3) / 3;  // Normalize to 0-1 range
+                const r = 255;
+                const g = Math.floor(68 + (165 * t));  // Transition from 68 to 255
+                return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}44`;
+            }
+            
+            // Orange to Lime Green transition (0 to +3)
+            if (value < 3) {
+                const t = value / 3;  // Normalize to 0-1 range
+                const r = Math.floor(255 * (1 - t));
+                const g = 205 + Math.floor(50 * t);  // Transition from 205 to 255
+                return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}32`;
+            }
+            
+            // Lime Green to Electric Blue transition (+3 to +6)
+            const t = (value - 3) / 3;  // Normalize to 0-1 range
+            const g = 205 - Math.floor(100 * t);  // Transition from 205 to 105
+            const b = 50 + Math.floor(175 * t);   // Transition from 50 to 255
+            return `#00${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+        }
+
+        function updateStatColors() {
+            // Update winrates
+            document.querySelectorAll('.winrate').forEach(el => {
+                const value = parseFloat(el.textContent);
+                el.style.color = getGradientColor(value, true);
+            });
+
+            // Update deltas
+            document.querySelectorAll('.delta-positive, .delta-negative').forEach(el => {
+                const value = parseFloat(el.textContent);
+                el.style.color = getGradientColor(value, false);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const table = document.getElementById('recommendations-table');
+            const tbody = table.querySelector('tbody');
+            const buttons = document.querySelectorAll('.sort-button');
+            
+            // Store the original data
+            const originalRows = Array.from(tbody.rows);
+            const getRowData = (row) => {
+                try {
+                    // Helper function to safely get numeric values
+                    const getNumericValue = (element) => {
+                        if (!element) return 0;
+                        const match = element.textContent.match(/[-+]?\d*\.?\d+/);
+                        return match ? parseFloat(match[0]) : 0;
+                    };
+
+                    // Get cells by their exact position
+                    const cells = Array.from(row.cells);
+                    const numEnemies = {{ enemy_team|length }};  // Get from Django template
+                    
+                    // Calculate exact positions
+                    const matchupCell = cells[numEnemies];     // Right after enemy columns
+                    const championCell = cells[numEnemies + 1]; // After matchup column
+                    const synergyCell = cells[numEnemies + 2];  // After champion column
+
+                    // Get matchup values
+                    const matchupWR = getNumericValue(matchupCell.querySelector('.winrate'));
+                    const matchupDelta = getNumericValue(matchupCell.querySelector('.delta-positive, .delta-negative'));
+
+                    // Get overall values
+                    const overallWR = getNumericValue(championCell.querySelector('.winrate'));
+                    const overallDelta = getNumericValue(championCell.querySelector('.delta-positive, .delta-negative'));
+
+                    // Get synergy values
+                    const synergyWR = getNumericValue(synergyCell.querySelector('.winrate'));
+                    const synergyDelta = getNumericValue(synergyCell.querySelector('.delta-positive, .delta-negative'));
+
+                    // Debug logging
+                    console.log('Row data:', {
+                        champion: championCell.querySelector('img')?.alt,
+                        matchupWR,
+                        matchupDelta,
+                        overallWR,
+                        overallDelta,
+                        synergyWR,
+                        synergyDelta
+                    });
+
+                    return {
+                        element: row,
+                        overall_matchup_wr: matchupWR,
+                        overall_matchup_delta: matchupDelta,
+                        overall_wr: overallWR,
+                        overall_delta: overallDelta,
+                        overall_synergy_wr: synergyWR,
+                        overall_synergy_delta: synergyDelta,
+                        combined_score: overallWR + overallDelta
+                    };
+                } catch (error) {
+                    console.error('Error parsing row:', row);
+                    console.error(error);
+                    return null;
+                }
+            };
+            
+            const rowsData = originalRows.map(getRowData).filter(data => data !== null);
+            
+            function sortTable(criterion) {
+                // Debug logging
+                console.log('Sorting by:', criterion);
+                console.log('Values before sort:', rowsData.map(d => ({
+                    champion: d.element.querySelector('.champion-cell img')?.alt,
+                    value: d[criterion],
+                    matchupWR: d.overall_matchup_wr,
+                    matchupDelta: d.overall_matchup_delta,
+                    overallWR: d.overall_wr,
+                    overallDelta: d.overall_delta,
+                    synergyWR: d.overall_synergy_wr,
+                    synergyDelta: d.overall_synergy_delta
+                })));
+
+                const sortedRows = [...rowsData]
+                    .sort((a, b) => {
+                        const valA = a[criterion];
+                        const valB = b[criterion];
+                        return valB - valA;
+                    })
+                    .map(data => data.element);
+
+                tbody.innerHTML = '';
+                sortedRows.forEach(row => tbody.appendChild(row));
+                
+                // Update colors after sorting
+                updateStatColors();
+            }
+            
+            buttons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // Update active button
+                    buttons.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Sort table
+                    sortTable(this.dataset.sort);
+                });
+            });
+            
+            // Add stat-value class to all numeric values
+            document.querySelectorAll('.winrate, .delta-positive, .delta-negative').forEach(el => {
+                el.classList.add('stat-value');
+            });
+            
+            // Initial color update
+            updateStatColors();
+        });
+    </script>
+</body>
+</html> 
